@@ -1,0 +1,28 @@
+{
+  "name": "routine-api",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "dev": "node --watch server.js"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Gabriel-Becher/Routine-API.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "bugs": {
+    "url": "https://github.com/Gabriel-Becher/Routine-API/issues"
+  },
+  "homepage": "https://github.com/Gabriel-Becher/Routine-API#readme",
+  "dependencies": {
+    "@sequelize/sqlite3": "^7.0.0-alpha.47",
+    "cors": "^2.8.5",
+    "express": "^5.1.0",
+    "sequelize": "^6.37.7"
+  }
+}
