@@ -1,5 +1,8 @@
 const express = require("express");
 const cors = require("cors");
+const usersRoutes = require("./routes/users");
+const tasksRoutes = require("./routes/tasks");
+const taskLogsRoutes = require("./routes/taskLogs");
 
 class App {
   static instance;
@@ -11,13 +14,36 @@ class App {
   }
 
   middlewares() {
-    this.instance.use(cors());
+    // Allow any origin and headers
+    this.instance.use(
+      cors({
+        origin: "*",
+        methods: ["GET", "HEAD", "PUT", "PATCH", "POST", "DELETE"],
+        allowedHeaders: ["Content-Type", "Authorization", "X-Requested-With"],
+      })
+    );
     this.instance.use(express.json());
   }
 
   routes() {
     this.instance.get("/", (req, res) => {
-      res.send("Hello World!");
+      res.send("Routine API is up");
+    });
+
+    this.instance.use("/api/users", usersRoutes);
+    this.instance.use("/api/tasks", tasksRoutes);
+    this.instance.use("/api/task-logs", taskLogsRoutes);
+
+    // Not found handler
+    this.instance.use((req, res) => {
+      res.status(404).json({ error: "Not found" });
+    });
+
+    // Error handler
+    // eslint-disable-next-line no-unused-vars
+    this.instance.use((err, req, res, _next) => {
+      console.error(err);
+      res.status(500).json({ error: "Internal server error" });
     });
   }
 }
