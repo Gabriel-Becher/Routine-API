@@ -27,10 +27,6 @@ const User = sequelize.define(
       type: DataTypes.STRING(32),
       allowNull: true,
     },
-    notificationtime: {
-      type: DataTypes.INTEGER,
-      allowNull: true,
-    },
   },
   {
     tableName: "users",
@@ -65,12 +61,12 @@ const Task = sequelize.define(
       allowNull: true,
     },
     daytime: {
-      type: DataTypes.STRING(5), // HH:mm
-      allowNull: true,
+      type: DataTypes.INTEGER, // minutes since midnight
+      allowNull: false,
     },
     notify: {
       type: DataTypes.BOOLEAN,
-      allowNull: true,
+      allowNull: false,
       defaultValue: false,
     },
     recurring: {
@@ -106,12 +102,7 @@ const TaskLog = sequelize.define(
     completed_at: {
       type: DataTypes.DATE,
       allowNull: false,
-    },
-    status: {
-      type: DataTypes.INTEGER,
-      allowNull: true,
-      defaultValue: 0,
-    },
+    }
   },
   {
     tableName: "task_logs",

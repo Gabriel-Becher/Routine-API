@@ -15,13 +15,7 @@ class App {
 
   middlewares() {
     // Allow any origin and headers
-    this.instance.use(
-      cors({
-        origin: "*",
-        methods: ["GET", "HEAD", "PUT", "PATCH", "POST", "DELETE"],
-        allowedHeaders: ["Content-Type", "Authorization", "X-Requested-With"],
-      })
-    );
+    
     this.instance.use(express.json());
   }
 
@@ -30,9 +24,9 @@ class App {
       res.send("Routine API is up");
     });
 
-    this.instance.use("/api/users", usersRoutes);
-    this.instance.use("/api/tasks", tasksRoutes);
-    this.instance.use("/api/task-logs", taskLogsRoutes);
+    this.instance.use("/users", usersRoutes);
+    this.instance.use("/tasks", tasksRoutes);
+    this.instance.use("/task-logs", taskLogsRoutes);
 
     // Not found handler
     this.instance.use((req, res) => {
