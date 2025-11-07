@@ -1,3 +1,4 @@
+const { UUIDV4 } = require("sequelize");
 const { User } = require("../models");
 
 module.exports = {
@@ -8,7 +9,12 @@ module.exports = {
       if (!id || !email)
         return res.status(400).json({ error: "id and email are required" });
 
-      const user = await User.create({ id, email, password, notificationtime });
+      const user = await User.create({
+        id: UUIDV4().toString(),
+        email,
+        password,
+        notificationtime,
+      });
       res.status(201).json(user);
     } catch (err) {
       if (err?.name === "SequelizeUniqueConstraintError") {
