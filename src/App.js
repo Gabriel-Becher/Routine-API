@@ -15,6 +15,12 @@ class App {
 
   middlewares() {
     // Allow any origin and headers
+    this.instance.use(cors(
+      { origin: "*",
+        allowedHeaders: "*",
+        methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"]
+      }
+    ));
     
     this.instance.use(express.json());
   }
