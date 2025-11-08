@@ -4,7 +4,7 @@ module.exports = {
   // Create user
   async create(req, res, next) {
     try {
-      const {email, password} = req.body;
+      const { email, password } = req.body;
       if (!password || !email)
         return res.status(400).json({ error: "id and email are required" });
 
@@ -19,6 +19,24 @@ module.exports = {
       if (err?.name === "SequelizeUniqueConstraintError") {
         return res.status(409).json({ error: "Email already exists" });
       }
+      next(err);
+    }
+  },
+  // Login user - returns whole user object
+  async login(req, res, next) {
+    try {
+      const { email, password } = req.body || {};
+      if (!email || !password) {
+        return res
+          .status(400)
+          .json({ error: "email and password are required" });
+      }
+      const user = await User.findOne({ where: { email } });
+      if (!user || user.password !== password) {
+        return res.status(401).json({ error: "Invalid credentials" });
+      }
+      res.json(user);
+    } catch (err) {
       next(err);
     }
   },
