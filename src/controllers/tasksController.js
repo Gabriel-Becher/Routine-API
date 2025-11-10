@@ -1,4 +1,5 @@
 const { Task } = require("../models");
+const { serializeTask, parseIncomingTs } = require("../utils/serialization");
 
 function computeNextOccurrence(recurring, fromDate) {
   // recurring: 7 chars '0'/'1' starting Sunday (index 0)
@@ -37,8 +38,16 @@ module.exports = {
         return res
           .status(400)
           .json({ error: "id, userId and title are required" });
-      const task = await Task.create(req.body);
-      res.status(201).json(task);
+      // Normalize possible epoch millis for date fields
+      const body = { ...req.body };
+      if (typeof body.day === "number" || (typeof body.day === "string" && /^\d+$/.test(body.day))) {
+        body.day = parseIncomingTs(body.day);
+      }
+      if (typeof body.completedAt === "number" || (typeof body.completedAt === "string" && /^\d+$/.test(body.completedAt))) {
+        body.completedAt = parseIncomingTs(body.completedAt);
+      }
+      const task = await Task.create(body);
+      res.status(201).json(serializeTask(task));
     } catch (err) {
       next(err);
     }
@@ -54,7 +63,7 @@ module.exports = {
       for (const t of tasks) {
         await refreshRecurringCompletion(t);
       }
-      res.json(tasks);
+  res.json(tasks.map(serializeTask));
     } catch (err) {
       next(err);
     }
@@ -69,7 +78,7 @@ module.exports = {
       if (task.deleted)
         return res.status(404).json({ error: "Task not found" });
       task = await refreshRecurringCompletion(task);
-      res.json(task);
+  res.json(serializeTask(task));
     } catch (err) {
       next(err);
     }
@@ -82,9 +91,16 @@ module.exports = {
       let task = await Task.findByPk(id);
       if (!task || task.deleted)
         return res.status(404).json({ error: "Task not found" });
-      await task.update(req.body);
+      const body = { ...req.body };
+      if (typeof body.day === "number" || (typeof body.day === "string" && /^\d+$/.test(body.day))) {
+        body.day = parseIncomingTs(body.day);
+      }
+      if (typeof body.completedAt === "number" || (typeof body.completedAt === "string" && /^\d+$/.test(body.completedAt))) {
+        body.completedAt = parseIncomingTs(body.completedAt);
+      }
+      await task.update(body);
       task = await refreshRecurringCompletion(task);
-      res.json(task);
+      res.json(serializeTask(task));
     } catch (err) {
       next(err);
     }
@@ -97,8 +113,8 @@ module.exports = {
       const task = await Task.findByPk(id);
       if (!task || task.deleted)
         return res.status(404).json({ error: "Task not found" });
-      await task.update({ deleted: true });
-      res.json(task);
+  await task.update({ deleted: true });
+  res.json(serializeTask(task));
     } catch (err) {
       next(err);
     }

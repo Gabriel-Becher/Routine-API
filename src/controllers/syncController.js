@@ -1,5 +1,6 @@
 const { Op } = require("sequelize");
 const { Task } = require("../models");
+const { serializeTask, parseIncomingTs } = require("../utils/serialization");
 
 // Sync only for tasks. TaskLog support removed.
 // GET /sync/tasks?userId=...&updated_after=...
@@ -13,7 +14,7 @@ async function getTasks(req, res, next) {
     const where = { userId };
     if (since) where.updatedAt = { [Op.gt]: since };
     const items = await Task.findAll({ where, order: [["updatedAt", "ASC"]] });
-    res.json({ items });
+    res.json({ items: items.map(serializeTask) });
   } catch (err) {
     next(err);
   }
@@ -40,17 +41,27 @@ async function postTasks(req, res, next) {
     const serverMap = new Map(serverTasks.map((t) => [t.id, t]));
 
     // Apply incoming changes
-    const applied = [];
+    const applied = []; 
     for (const t of items) {
       if (!t?.id) continue;
       t.userId = t.userId || userId;
       const incomingUpdatedAt = t.updatedAt
-        ? new Date(t.updatedAt)
+        ? parseIncomingTs(t.updatedAt)
         : new Date();
+      const payload = { ...t };
+      if (typeof payload.day === "number" || (typeof payload.day === "string" && /^\d+$/.test(payload.day))) {
+        payload.day = parseIncomingTs(payload.day);
+      }
+      if (
+        typeof payload.completedAt === "number" ||
+        (typeof payload.completedAt === "string" && /^\d+$/.test(payload.completedAt))
+      ) {
+        payload.completedAt = parseIncomingTs(payload.completedAt);
+      }
       const existing = serverMap.get(t.id);
       if (!existing) {
         const created = await Task.create({
-          ...t,
+          ...payload,
           updatedAt: incomingUpdatedAt,
         });
         serverMap.set(created.id, created);
@@ -59,7 +70,7 @@ async function postTasks(req, res, next) {
       }
       if (incomingUpdatedAt > existing.updatedAt) {
         await existing.update(
-          { ...t, updatedAt: incomingUpdatedAt },
+          { ...payload, updatedAt: incomingUpdatedAt },
           { silent: true }
         );
         applied.push(existing);
@@ -71,14 +82,14 @@ async function postTasks(req, res, next) {
     for (const [id, srv] of serverMap.entries()) {
       const incoming = incomingMap.get(id);
       if (!incoming) {
-        override.push(srv);
+        override.push(serializeTask(srv));
         continue;
       }
       const incomingUpdatedAt = incoming.updatedAt
-        ? new Date(incoming.updatedAt)
+        ? parseIncomingTs(incoming.updatedAt)
         : null;
       if (!incomingUpdatedAt || srv.updatedAt > incomingUpdatedAt) {
-        override.push(srv);
+        override.push(serializeTask(srv));
       }
     }
 
@@ -153,11 +164,12 @@ async function postTasksSnapshot(req, res, next) {
         : null;
       if (!incomingUpdatedAt || srv.updatedAt > incomingUpdatedAt) {
         // Servidor tem versão mais recente
-        toOverride.push(srv);
+        toOverride.push(serializeTask(srv));
       }
     }
 
-    res.json({ override: toOverride });
+    // Harmonize snapshot response to plain array (like delta sync)
+    res.json(toOverride);
   } catch (err) {
     next(err);
   }
