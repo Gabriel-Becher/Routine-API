@@ -57,11 +57,11 @@ const Task = sequelize.define(
       allowNull: true,
     },
     day: {
-      type: DataTypes.DATE, // timestamp
+      type: DataTypes.DATE, // data base da tarefa (para não recorrentes), opcional
       allowNull: true,
     },
     daytime: {
-      type: DataTypes.INTEGER, // minutes since midnight
+      type: DataTypes.INTEGER, // minutos desde 00:00 (0..1439)
       allowNull: false,
     },
     notify: {
@@ -70,42 +70,21 @@ const Task = sequelize.define(
       defaultValue: false,
     },
     recurring: {
-      type: DataTypes.STRING(7), // days of week flags
+      type: DataTypes.STRING(7), // flags de dias da semana, 7 chars '0'/'1' começando no Domingo
       allowNull: true,
     },
+    completedAt: {
+      type: DataTypes.DATE, // última conclusão; para recorrentes, considera concluída até a próxima ocorrência
+      allowNull: true,
+    },
+      deleted: {
+        type: DataTypes.BOOLEAN, // soft delete para sincronização
+        allowNull: false,
+        defaultValue: false,
+      },
   },
   {
     tableName: "tasks",
-    timestamps: true,
-  }
-);
-
-// TaskLog model
-const TaskLog = sequelize.define(
-  "TaskLog",
-  {
-    id: {
-      type: DataTypes.STRING,
-      primaryKey: true,
-      allowNull: false, // UUID from client
-    },
-    taskId: {
-      type: DataTypes.STRING,
-      allowNull: false,
-      references: { model: "tasks", key: "id" },
-    },
-    userId: {
-      type: DataTypes.STRING,
-      allowNull: false,
-      references: { model: "users", key: "id" },
-    },
-    completed_at: {
-      type: DataTypes.DATE,
-      allowNull: false,
-    }
-  },
-  {
-    tableName: "task_logs",
     timestamps: true,
   }
 );
@@ -114,18 +93,4 @@ const TaskLog = sequelize.define(
 User.hasMany(Task, { foreignKey: "userId", as: "tasks", onDelete: "CASCADE" });
 Task.belongsTo(User, { foreignKey: "userId", as: "user" });
 
-User.hasMany(TaskLog, {
-  foreignKey: "userId",
-  as: "taskLogs",
-  onDelete: "CASCADE",
-});
-TaskLog.belongsTo(User, { foreignKey: "userId", as: "user" });
-
-Task.hasMany(TaskLog, {
-  foreignKey: "taskId",
-  as: "logs",
-  onDelete: "CASCADE",
-});
-TaskLog.belongsTo(Task, { foreignKey: "taskId", as: "task" });
-
-module.exports = { sequelize, Sequelize, User, Task, TaskLog };
+module.exports = { sequelize, Sequelize, User, Task };

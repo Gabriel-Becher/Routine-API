@@ -2,7 +2,7 @@ const express = require("express");
 const cors = require("cors");
 const usersRoutes = require("./routes/users");
 const tasksRoutes = require("./routes/tasks");
-const taskLogsRoutes = require("./routes/taskLogs");
+const syncRoutes = require("./routes/sync");
 
 class App {
   static instance;
@@ -15,13 +15,14 @@ class App {
 
   middlewares() {
     // Allow any origin and headers
-    this.instance.use(cors(
-      { origin: "*",
+    this.instance.use(
+      cors({
+        origin: "*",
         allowedHeaders: "*",
-        methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"]
-      }
-    ));
-    
+        methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+      })
+    );
+
     this.instance.use(express.json());
   }
 
@@ -32,7 +33,7 @@ class App {
 
     this.instance.use("/users", usersRoutes);
     this.instance.use("/tasks", tasksRoutes);
-    this.instance.use("/task-logs", taskLogsRoutes);
+    this.instance.use("/sync", syncRoutes);
 
     // Not found handler
     this.instance.use((req, res) => {
