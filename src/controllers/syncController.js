@@ -19,13 +19,27 @@ async function getTasks(req, res, next) {
   }
 }
 
-// POST /sync/tasks { userId, items: Task[] }
+// POST /sync/tasks/:userId with body = Task[] ; returns Task[] to override locally
 async function postTasks(req, res, next) {
   try {
-    const { items } = req.body || {};
-    if (!Array.isArray(items))
-      return res.status(400).json({ error: "items[] are required" });
-    const userId = items[0].userId;
+    const { userId } = req.params;
+    const items = req.body;
+    if (!userId || !Array.isArray(items))
+      return res
+        .status(400)
+        .json({ error: "userId path param and an array body are required" });
+
+    // Index incoming
+    const incomingMap = new Map();
+    for (const t of items) {
+      if (t?.id) incomingMap.set(t.id, t);
+    }
+
+    // Load server snapshot for this user
+    const serverTasks = await Task.findAll({ where: { userId } });
+    const serverMap = new Map(serverTasks.map((t) => [t.id, t]));
+
+    // Apply incoming changes
     const applied = [];
     for (const t of items) {
       if (!t?.id) continue;
@@ -33,12 +47,13 @@ async function postTasks(req, res, next) {
       const incomingUpdatedAt = t.updatedAt
         ? new Date(t.updatedAt)
         : new Date();
-      const existing = await Task.findByPk(t.id);
+      const existing = serverMap.get(t.id);
       if (!existing) {
         const created = await Task.create({
           ...t,
           updatedAt: incomingUpdatedAt,
         });
+        serverMap.set(created.id, created);
         applied.push(created);
         continue;
       }
@@ -50,7 +65,26 @@ async function postTasks(req, res, next) {
         applied.push(existing);
       }
     }
-    res.json({ applied });
+
+    // Build overrides: tasks not sent by client OR server has newer version
+    const override = [];
+    for (const [id, srv] of serverMap.entries()) {
+      const incoming = incomingMap.get(id);
+      if (!incoming) {
+        override.push(srv);
+        continue;
+      }
+      const incomingUpdatedAt = incoming.updatedAt
+        ? new Date(incoming.updatedAt)
+        : null;
+      if (!incomingUpdatedAt || srv.updatedAt > incomingUpdatedAt) {
+        override.push(srv);
+      }
+    }
+
+    // Return only one list for the app to overwrite locally
+    // Return only the array expected by the mobile client
+    res.json(override);
   } catch (err) {
     next(err);
   }
