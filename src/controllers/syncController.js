@@ -22,9 +22,10 @@ async function getTasks(req, res, next) {
 // POST /sync/tasks { userId, items: Task[] }
 async function postTasks(req, res, next) {
   try {
-    const { userId, items } = req.body || {};
-    if (!userId || !Array.isArray(items))
-      return res.status(400).json({ error: "userId and items[] are required" });
+    const { items } = req.body || {};
+    if (!Array.isArray(items))
+      return res.status(400).json({ error: "items[] are required" });
+    const userId = items[0].userId;
     const applied = [];
     for (const t of items) {
       if (!t?.id) continue;
@@ -67,7 +68,7 @@ async function postTasksSnapshot(req, res, next) {
   try {
     const { userId, items } = req.body || {};
     if (!userId || !Array.isArray(items)) {
-      return res.status(400).json({ error: 'userId and items[] are required' });
+      return res.status(400).json({ error: "userId and items[] are required" });
     }
 
     // Index incoming by id para comparação rápida
@@ -78,21 +79,29 @@ async function postTasksSnapshot(req, res, next) {
 
     // 1) Carrega todas as tarefas do servidor desse usuário
     const serverTasks = await Task.findAll({ where: { userId } });
-    const serverMap = new Map(serverTasks.map(t => [t.id, t]));
+    const serverMap = new Map(serverTasks.map((t) => [t.id, t]));
 
     // 2) Aplica itens incoming (create/update if newer)
     for (const t of items) {
       if (!t?.id) continue;
       t.userId = t.userId || userId;
-      const incomingUpdatedAt = t.updatedAt ? new Date(t.updatedAt) : new Date();
+      const incomingUpdatedAt = t.updatedAt
+        ? new Date(t.updatedAt)
+        : new Date();
       const existing = serverMap.get(t.id);
       if (!existing) {
-        const created = await Task.create({ ...t, updatedAt: incomingUpdatedAt });
+        const created = await Task.create({
+          ...t,
+          updatedAt: incomingUpdatedAt,
+        });
         serverMap.set(created.id, created);
         continue;
       }
       if (incomingUpdatedAt > existing.updatedAt) {
-        await existing.update({ ...t, updatedAt: incomingUpdatedAt }, { silent: true });
+        await existing.update(
+          { ...t, updatedAt: incomingUpdatedAt },
+          { silent: true }
+        );
       }
     }
 
@@ -105,7 +114,9 @@ async function postTasksSnapshot(req, res, next) {
         toOverride.push(srv);
         continue;
       }
-      const incomingUpdatedAt = incoming.updatedAt ? new Date(incoming.updatedAt) : null;
+      const incomingUpdatedAt = incoming.updatedAt
+        ? new Date(incoming.updatedAt)
+        : null;
       if (!incomingUpdatedAt || srv.updatedAt > incomingUpdatedAt) {
         // Servidor tem versão mais recente
         toOverride.push(srv);

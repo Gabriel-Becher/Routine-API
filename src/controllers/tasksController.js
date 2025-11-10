@@ -64,9 +64,10 @@ module.exports = {
   async get(req, res, next) {
     try {
       const { id } = req.params;
-  let task = await Task.findByPk(id);
+      let task = await Task.findByPk(id);
       if (!task) return res.status(404).json({ error: "Task not found" });
-  if (task.deleted) return res.status(404).json({ error: "Task not found" });
+      if (task.deleted)
+        return res.status(404).json({ error: "Task not found" });
       task = await refreshRecurringCompletion(task);
       res.json(task);
     } catch (err) {
@@ -79,7 +80,8 @@ module.exports = {
     try {
       const { id } = req.params;
       let task = await Task.findByPk(id);
-      if (!task || task.deleted) return res.status(404).json({ error: "Task not found" });
+      if (!task || task.deleted)
+        return res.status(404).json({ error: "Task not found" });
       await task.update(req.body);
       task = await refreshRecurringCompletion(task);
       res.json(task);
@@ -93,7 +95,8 @@ module.exports = {
     try {
       const { id } = req.params;
       const task = await Task.findByPk(id);
-      if (!task || task.deleted) return res.status(404).json({ error: "Task not found" });
+      if (!task || task.deleted)
+        return res.status(404).json({ error: "Task not found" });
       await task.update({ deleted: true });
       res.json(task);
     } catch (err) {

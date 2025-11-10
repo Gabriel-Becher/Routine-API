@@ -77,11 +77,11 @@ const Task = sequelize.define(
       type: DataTypes.DATE, // última conclusão; para recorrentes, considera concluída até a próxima ocorrência
       allowNull: true,
     },
-      deleted: {
-        type: DataTypes.BOOLEAN, // soft delete para sincronização
-        allowNull: false,
-        defaultValue: false,
-      },
+    deleted: {
+      type: DataTypes.BOOLEAN, // soft delete para sincronização
+      allowNull: false,
+      defaultValue: false,
+    },
   },
   {
     tableName: "tasks",
