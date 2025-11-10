@@ -16,7 +16,7 @@ module.exports = {
         password,
       });
       console.log("Created user:", user.id);
-  res.status(201).json(serializeUser(user));
+      res.status(201).json(serializeUser(user));
     } catch (err) {
       if (err?.name === "SequelizeUniqueConstraintError") {
         return res.status(409).json({ error: "Email already exists" });
@@ -37,7 +37,7 @@ module.exports = {
       if (!user || user.password !== password) {
         return res.status(401).json({ error: "Invalid credentials" });
       }
-  res.json(serializeUser(user));
+      res.json(serializeUser(user));
     } catch (err) {
       next(err);
     }
@@ -47,7 +47,7 @@ module.exports = {
   async list(_req, res, next) {
     try {
       const users = await User.findAll();
-  res.json(users.map(serializeUser));
+      res.json(users.map(serializeUser));
     } catch (err) {
       next(err);
     }
@@ -59,7 +59,7 @@ module.exports = {
       const { id } = req.params;
       const user = await User.findByPk(id);
       if (!user) return res.status(404).json({ error: "User not found" });
-  res.json(serializeUser(user));
+      res.json(serializeUser(user));
     } catch (err) {
       next(err);
     }
@@ -72,7 +72,7 @@ module.exports = {
       const [count] = await User.update(req.body, { where: { id } });
       if (!count) return res.status(404).json({ error: "User not found" });
       const user = await User.findByPk(id);
-  res.json(serializeUser(user));
+      res.json(serializeUser(user));
     } catch (err) {
       next(err);
     }

@@ -40,10 +40,16 @@ module.exports = {
           .json({ error: "id, userId and title are required" });
       // Normalize possible epoch millis for date fields
       const body = { ...req.body };
-      if (typeof body.day === "number" || (typeof body.day === "string" && /^\d+$/.test(body.day))) {
+      if (
+        typeof body.day === "number" ||
+        (typeof body.day === "string" && /^\d+$/.test(body.day))
+      ) {
         body.day = parseIncomingTs(body.day);
       }
-      if (typeof body.completedAt === "number" || (typeof body.completedAt === "string" && /^\d+$/.test(body.completedAt))) {
+      if (
+        typeof body.completedAt === "number" ||
+        (typeof body.completedAt === "string" && /^\d+$/.test(body.completedAt))
+      ) {
         body.completedAt = parseIncomingTs(body.completedAt);
       }
       const task = await Task.create(body);
@@ -63,7 +69,7 @@ module.exports = {
       for (const t of tasks) {
         await refreshRecurringCompletion(t);
       }
-  res.json(tasks.map(serializeTask));
+      res.json(tasks.map(serializeTask));
     } catch (err) {
       next(err);
     }
@@ -78,7 +84,7 @@ module.exports = {
       if (task.deleted)
         return res.status(404).json({ error: "Task not found" });
       task = await refreshRecurringCompletion(task);
-  res.json(serializeTask(task));
+      res.json(serializeTask(task));
     } catch (err) {
       next(err);
     }
@@ -92,10 +98,16 @@ module.exports = {
       if (!task || task.deleted)
         return res.status(404).json({ error: "Task not found" });
       const body = { ...req.body };
-      if (typeof body.day === "number" || (typeof body.day === "string" && /^\d+$/.test(body.day))) {
+      if (
+        typeof body.day === "number" ||
+        (typeof body.day === "string" && /^\d+$/.test(body.day))
+      ) {
         body.day = parseIncomingTs(body.day);
       }
-      if (typeof body.completedAt === "number" || (typeof body.completedAt === "string" && /^\d+$/.test(body.completedAt))) {
+      if (
+        typeof body.completedAt === "number" ||
+        (typeof body.completedAt === "string" && /^\d+$/.test(body.completedAt))
+      ) {
         body.completedAt = parseIncomingTs(body.completedAt);
       }
       await task.update(body);
@@ -113,8 +125,8 @@ module.exports = {
       const task = await Task.findByPk(id);
       if (!task || task.deleted)
         return res.status(404).json({ error: "Task not found" });
-  await task.update({ deleted: true });
-  res.json(serializeTask(task));
+      await task.update({ deleted: true });
+      res.json(serializeTask(task));
     } catch (err) {
       next(err);
     }

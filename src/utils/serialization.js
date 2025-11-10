@@ -16,7 +16,7 @@ function serializeTask(taskOrPlain) {
 
 function parseIncomingTs(v) {
   if (v == null) return null;
-  if (typeof v === 'number') return new Date(v);
+  if (typeof v === "number") return new Date(v);
   const n = Number(v);
   if (!Number.isNaN(n) && String(n) === String(v)) return new Date(n);
   return new Date(v);

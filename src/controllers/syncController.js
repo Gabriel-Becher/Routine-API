@@ -2,177 +2,106 @@ const { Op } = require("sequelize");
 const { Task } = require("../models");
 const { serializeTask, parseIncomingTs } = require("../utils/serialization");
 
-// Sync only for tasks. TaskLog support removed.
-// GET /sync/tasks?userId=...&updated_after=...
-async function getTasks(req, res, next) {
-  try {
-    const { userId, updated_after } = req.query;
-    if (!userId) return res.status(400).json({ error: "userId is required" });
-    const since = updated_after
-      ? new Date(isNaN(updated_after) ? updated_after : Number(updated_after))
-      : null;
-    const where = { userId };
-    if (since) where.updatedAt = { [Op.gt]: since };
-    const items = await Task.findAll({ where, order: [["updatedAt", "ASC"]] });
-    res.json({ items: items.map(serializeTask) });
-  } catch (err) {
-    next(err);
-  }
-}
-
 // POST /sync/tasks/:userId with body = Task[] ; returns Task[] to override locally
 async function postTasks(req, res, next) {
   try {
     const { userId } = req.params;
-    const items = req.body;
-    if (!userId || !Array.isArray(items))
-      return res
-        .status(400)
-        .json({ error: "userId path param and an array body are required" });
+    const incoming = Array.isArray(req.body) ? req.body : null;
+    if (!userId)
+      return res.status(400).json({ error: "userId param required" });
+    if (!incoming)
+      return res.status(400).json({ error: "Body must be an array of tasks" });
 
-    // Index incoming
-    const incomingMap = new Map();
-    for (const t of items) {
-      if (t?.id) incomingMap.set(t.id, t);
-    }
-
-    // Load server snapshot for this user
-    const serverTasks = await Task.findAll({ where: { userId } });
-    const serverMap = new Map(serverTasks.map((t) => [t.id, t]));
-
-    // Apply incoming changes
-    const applied = []; 
-    for (const t of items) {
-      if (!t?.id) continue;
-      t.userId = t.userId || userId;
-      const incomingUpdatedAt = t.updatedAt
-        ? parseIncomingTs(t.updatedAt)
-        : new Date();
-      const payload = { ...t };
-      if (typeof payload.day === "number" || (typeof payload.day === "string" && /^\d+$/.test(payload.day))) {
-        payload.day = parseIncomingTs(payload.day);
+    // Normalize incoming tasks: ensure userId and convert date-like fields
+    const byIdIncoming = new Map();
+    for (const raw of incoming) {
+      if (!raw || !raw.id) continue; // skip invalid entries quietly
+      const t = { ...raw };
+      t.userId = userId; // trust path param
+      if (
+        typeof t.day === "number" ||
+        (typeof t.day === "string" && /^\d+$/.test(t.day))
+      ) {
+        t.day = parseIncomingTs(t.day);
       }
       if (
-        typeof payload.completedAt === "number" ||
-        (typeof payload.completedAt === "string" && /^\d+$/.test(payload.completedAt))
+        typeof t.completedAt === "number" ||
+        (typeof t.completedAt === "string" && /^\d+$/.test(t.completedAt))
       ) {
-        payload.completedAt = parseIncomingTs(payload.completedAt);
+        t.completedAt = parseIncomingTs(t.completedAt);
       }
-      const existing = serverMap.get(t.id);
-      if (!existing) {
-        const created = await Task.create({
-          ...payload,
-          updatedAt: incomingUpdatedAt,
-        });
-        serverMap.set(created.id, created);
-        applied.push(created);
-        continue;
-      }
-      if (incomingUpdatedAt > existing.updatedAt) {
-        await existing.update(
-          { ...payload, updatedAt: incomingUpdatedAt },
-          { silent: true }
-        );
-        applied.push(existing);
-      }
+      const incUpdatedAtDate = parseIncomingTs(t.updatedAt);
+      const incUpdatedAtMs = incUpdatedAtDate ? incUpdatedAtDate.getTime() : 0;
+      t.__incUpdatedAtDate = incUpdatedAtDate; // keep for saving with silent
+      t.__incUpdatedAtMs = incUpdatedAtMs; // keep for compare
+      byIdIncoming.set(t.id, t);
     }
 
-    // Build overrides: tasks not sent by client OR server has newer version
-    const override = [];
-    for (const [id, srv] of serverMap.entries()) {
-      const incoming = incomingMap.get(id);
-      if (!incoming) {
-        override.push(serializeTask(srv));
-        continue;
-      }
-      const incomingUpdatedAt = incoming.updatedAt
-        ? parseIncomingTs(incoming.updatedAt)
-        : null;
-      if (!incomingUpdatedAt || srv.updatedAt > incomingUpdatedAt) {
-        override.push(serializeTask(srv));
-      }
-    }
-
-    // Return only one list for the app to overwrite locally
-    // Return only the array expected by the mobile client
-    res.json(override);
-  } catch (err) {
-    next(err);
-  }
-}
-
-// POST /sync/tasks/snapshot { userId, items: Task[] }
-// Recebe a lista completa de tarefas do app. Para cada item:
-//  - Cria se não existir
-//  - Atualiza se incoming.updatedAt > existing.updatedAt
-//  - Não altera se incoming está desatualizado
-// Ao final, devolve os registros do servidor que devem sobrescrever o cliente:
-//  - Os que o servidor considera mais recentes que os itens enviados pelo cliente (conflitos),
-//  - E também quaisquer tarefas do servidor pertencentes ao userId que o cliente não enviou.
-async function postTasksSnapshot(req, res, next) {
-  try {
-    const { userId, items } = req.body || {};
-    if (!userId || !Array.isArray(items)) {
-      return res.status(400).json({ error: "userId and items[] are required" });
-    }
-
-    // Index incoming by id para comparação rápida
-    const incomingMap = new Map();
-    for (const t of items) {
-      if (t?.id) incomingMap.set(t.id, t);
-    }
-
-    // 1) Carrega todas as tarefas do servidor desse usuário
+    // Load all server tasks for this user (include deleted = true to sync deletions)
     const serverTasks = await Task.findAll({ where: { userId } });
-    const serverMap = new Map(serverTasks.map((t) => [t.id, t]));
+    const byIdServer = new Map(serverTasks.map((s) => [s.id, s]));
 
-    // 2) Aplica itens incoming (create/update if newer)
-    for (const t of items) {
-      if (!t?.id) continue;
-      t.userId = t.userId || userId;
-      const incomingUpdatedAt = t.updatedAt
-        ? new Date(t.updatedAt)
-        : new Date();
-      const existing = serverMap.get(t.id);
-      if (!existing) {
-        const created = await Task.create({
-          ...t,
-          updatedAt: incomingUpdatedAt,
-        });
-        serverMap.set(created.id, created);
-        continue;
+    const toReturn = [];
+
+    // Upsert/resolve conflicts for every incoming task
+    for (const [id, inc] of byIdIncoming.entries()) {
+      const server = byIdServer.get(id);
+      if (!server) {
+        // Create new on server using incoming values and keep updatedAt from client
+        const values = { ...inc };
+        delete values.__incUpdatedAtDate;
+        delete values.__incUpdatedAtMs;
+        // If client didn't send updatedAt, set to now for consistency
+        if (inc.__incUpdatedAtDate) values.updatedAt = inc.__incUpdatedAtDate;
+        await Task.create(values, { silent: true });
+        continue; // client already up-to-date for this task
       }
-      if (incomingUpdatedAt > existing.updatedAt) {
-        await existing.update(
-          { ...t, updatedAt: incomingUpdatedAt },
-          { silent: true }
-        );
+
+      const srvUpdatedAtMs = server.updatedAt
+        ? new Date(server.updatedAt).getTime()
+        : 0;
+      const incUpdatedAtMs = inc.__incUpdatedAtMs || 0;
+
+      if (incUpdatedAtMs > srvUpdatedAtMs) {
+        // Client newer -> update server with incoming values, preserving client updatedAt
+        const values = { ...inc };
+        delete values.__incUpdatedAtDate;
+        delete values.__incUpdatedAtMs;
+        if (inc.__incUpdatedAtDate) values.updatedAt = inc.__incUpdatedAtDate;
+        // Never change primary key
+        delete values.id;
+        // Ensure userId stays consistent
+        values.userId = userId;
+        server.set(values);
+        await server.save({ silent: true });
+      } else if (srvUpdatedAtMs > incUpdatedAtMs) {
+        // Server newer -> add to return payload to override client
+        toReturn.push(serializeTask(server));
+      } else {
+        // Equal timestamps: do nothing
       }
     }
 
-    // 3) Calcula o que deve sobrescrever o cliente
-    const toOverride = [];
-    for (const [id, srv] of serverMap.entries()) {
-      const incoming = incomingMap.get(id);
-      if (!incoming) {
-        // Cliente não enviou essa tarefa -> precisa baixar do servidor
-        toOverride.push(srv);
-        continue;
-      }
-      const incomingUpdatedAt = incoming.updatedAt
-        ? new Date(incoming.updatedAt)
-        : null;
-      if (!incomingUpdatedAt || srv.updatedAt > incomingUpdatedAt) {
-        // Servidor tem versão mais recente
-        toOverride.push(serializeTask(srv));
+    // Any server tasks that are missing on client must be returned
+    for (const server of serverTasks) {
+      if (!byIdIncoming.has(server.id)) {
+        toReturn.push(serializeTask(server));
       }
     }
 
-    // Harmonize snapshot response to plain array (like delta sync)
-    res.json(toOverride);
+    // Deduplicate return list by id
+    const seen = new Set();
+    const uniqueReturn = [];
+    for (const t of toReturn) {
+      if (seen.has(t.id)) continue;
+      seen.add(t.id);
+      uniqueReturn.push(t);
+    }
+
+    return res.json(uniqueReturn);
   } catch (err) {
     next(err);
   }
 }
 
-module.exports = { getTasks, postTasks, postTasksSnapshot };
+module.exports = { postTasks };
